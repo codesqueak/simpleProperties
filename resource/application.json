@@ -1,0 +1,12 @@
+{
+  "profile": "dev",
+  "p1": "abc1",
+  "level1": {
+    "p2": "xyz",
+    "p3": "${p1:xyzzy}"
+  },
+  "p4": 123,
+  "p5": 4.5,
+  "p6": true,
+  "p7": null
+}
