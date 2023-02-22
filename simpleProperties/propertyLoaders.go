@@ -14,41 +14,70 @@ import (
 	"strings"
 )
 
-func baseLoader(m map[string]string, path string) {
+const basePath = "resource/application"
+const bootstrapPath = "resource/bootstrap"
+
+func GlobalPropertyLoader(path string) func(*Properties) {
+	return func(p *Properties) {
+		println("-- global environment --")
+		baseLoader(p, path)
+	}
+}
+
+func ProfilePropertyLoader(path string) func(*Properties) {
+	return func(p *Properties) {
+		println("-- profile environment --")
+		profileNames := strings.Split(p.keyValueMap["profile"], ",")
+		if len(profileNames) > 0 {
+			for _, name := range profileNames {
+				if name != "" {
+					name := strings.Trim(name, " ")
+					baseLoader(p, path+"_"+name)
+				}
+			}
+		}
+	}
+}
+
+func LoadOSEnvironment() func(*Properties) {
+	return func(p *Properties) {
+		println("-- os environment --")
+		for _, kv := range os.Environ() {
+			parts := strings.Split(kv, "=")
+			if len(parts) < 2 {
+				log.Fatalf("Invalid environment variable string: %s", kv)
+			}
+			var key = strings.Trim(parts[0], "")
+			var value = strings.Trim(parts[1], "")
+			println(key, "-->", value)
+			p.keyValueMap[key] = value
+		}
+	}
+}
+
+//
+// utilities
+//
+
+func baseLoader(p *Properties, path string) {
 	println("Loading from: " + path)
 	dir, filename := filepath.Split(path)
 	fsys := os.DirFS(dir)
 	file, err := fsys.Open(filename + ".yaml")
 	if err == nil {
-		loadYAML(file, m)
+		loadYAML(file, p.keyValueMap)
 	}
 	file, err = fsys.Open(filename + ".json")
 	if err == nil {
-		loadJSON(file, m)
+		loadJSON(file, p.keyValueMap)
 	}
 	file, err = fsys.Open(filename + ".properties")
 	if err == nil {
-		loadProperties(file, m)
+		loadPropertiesFromFile(file, p.keyValueMap)
 	}
 }
 
-func loadOSEnvironment(m map[string]string) {
-	println("-- environment --")
-	for _, kv := range os.Environ() {
-		parts := strings.Split(kv, "=")
-		if len(parts) < 2 {
-			log.Fatalf("Invalid environment variable string: %s", kv)
-		}
-		var key = parts[0]
-		var value = parts[1]
-		key = strings.Trim(key, " ")
-		value = strings.Trim(value, " ")
-		println(key, "-->", value)
-		m[key] = value
-	}
-}
-
-func loadProperties(file fs.File, m map[string]string) {
+func loadPropertiesFromFile(file fs.File, m map[string]string) {
 	println("-- properties --")
 	defer file.Close()
 	scanner := bufio.NewScanner(file)
@@ -69,7 +98,9 @@ func loadProperties(file fs.File, m map[string]string) {
 		strings.Trim(key, " ")
 		strings.Trim(value, " ")
 		println(key, "-->", value)
-		m[key] = value
+		if key != "" {
+			m[key] = value
+		}
 	}
 }
 
