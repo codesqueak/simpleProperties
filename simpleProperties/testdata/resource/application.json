@@ -3,7 +3,7 @@
   "p1": "abc1",
   "level1": {
     "p2": "xyz",
-    "p3": "${p1:xyzzy}"
+    "p3": "pp ${p1:xyzzy} qq"
   },
   "p4": 123,
   "p5": 4.5,
