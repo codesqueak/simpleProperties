@@ -2,8 +2,7 @@ package main
 
 import (
 	"fmt"
-	"propertySource/simpleProperties"
-	_ "propertySource/simpleProperties"
+	"propertySource/pkg/simpleProperties"
 )
 
 func main() {
