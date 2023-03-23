@@ -1,6 +1,13 @@
 package simpleProperties
 
-var internalProperties = &Properties{nil, make(map[string]string, 32), nil}
+import "container/list"
+
+var internalProperties = &Properties{
+	make(map[string]string, 32),
+	make(map[string]string, 32),
+	make(map[string]string, 32),
+	make(map[string]*list.List, 32),
+	nil}
 
 // load simpleProperties with this precedence
 //
@@ -12,7 +19,7 @@ var internalProperties = &Properties{nil, make(map[string]string, 32), nil}
 // 6. command line arguments
 // 7. evaluate references
 //
-// note: If mixed properties, JSON and YAML files are present, all will be read, but .yaml overridden by .json override by .properties
+// note: If mixed properties, JSON and YAML files are present, all will be read, but .yaml overridden by .json overridden by .properties
 
 func init() {
 	println("-- load bootstrap --")
@@ -21,19 +28,23 @@ func init() {
 	// loaders
 	operations = append(operations, GlobalPropertyLoader(basePath))
 	operations = append(operations, ProfilePropertyLoader(basePath))
-	operations = append(operations, LoadOSEnvironment())
+	//	operations = append(operations, LoadOSEnvironment())
 	//
 	// evaluators
-	operations = append(operations, DefaultEvaluator(""))
+	operations = append(operations, BasicEvaluator())
+	// operations = append(operations, DefaultEvaluator())
 	//
 	// boot properties
-	f := GlobalPropertyLoader(bootstrapPath) // loads into keyValueMap. Will need to move to bootKeyValueMap
+	f := BootPropertyLoader(bootstrapPath)
 	f(internalProperties)
-	internalProperties = &Properties{internalProperties.keyValueMap, make(map[string]string, 128), operations}
 }
 
 func NewProperties() *Properties {
-	return &Properties{internalProperties.bootKeyValueMap, internalProperties.keyValueMap, internalProperties.operations}
+	return &Properties{internalProperties.bootKeyValueMap,
+		internalProperties.keyValueMap,
+		internalProperties.evalKeyValueMap,
+		internalProperties.evalExprMap,
+		internalProperties.operations}
 }
 
 func (p *Properties) Load() {
@@ -67,6 +78,28 @@ func (p *Properties) GetProperty(key string) string {
 	}
 }
 
+func (p *Properties) GetEvalProperty(key string) string {
+	if key == "" {
+		return ""
+	} else {
+		if p.evalKeyValueMap != nil {
+			return p.evalKeyValueMap[key]
+		}
+		return ""
+	}
+}
+
+func (p *Properties) GetExprProperty(key string) *list.List {
+	if key == "" {
+		return nil
+	} else {
+		if p.evalExprMap != nil {
+			return p.evalExprMap[key]
+		}
+		return nil
+	}
+}
+
 func (p *Properties) GetBootKeys() []string {
 	keys := []string{}
 	for k := range p.bootKeyValueMap {
@@ -83,8 +116,18 @@ func (p *Properties) GetKeys() []string {
 	return keys
 }
 
+func (p *Properties) GetEvalKeys() []string {
+	keys := []string{}
+	for k := range p.evalKeyValueMap {
+		keys = append(keys, k)
+	}
+	return keys
+}
+
 type Properties struct {
 	bootKeyValueMap map[string]string
 	keyValueMap     map[string]string
+	evalKeyValueMap map[string]string
+	evalExprMap     map[string]*list.List
 	operations      []func(p *Properties)
 }

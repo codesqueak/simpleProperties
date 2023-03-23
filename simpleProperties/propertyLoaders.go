@@ -2,6 +2,7 @@ package simpleProperties
 
 import (
 	"bufio"
+	"container/list"
 	"encoding/json"
 	"fmt"
 	"gopkg.in/yaml.v3"
@@ -10,6 +11,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 )
@@ -17,6 +19,18 @@ import (
 const basePath = "resource/application"
 const bootstrapPath = "resource/bootstrap"
 
+var expression_matcher, _ = regexp.Compile("(\\$+\\{\\S+(:\\S+){0,1}})")
+var name_matcher, _ = regexp.Compile("\\$\\{(\\S+?){1}(:\\S+?){0,1}}")
+
+func BootPropertyLoader(path string) func(*Properties) {
+	return func(p *Properties) {
+		println("-- boot environment --")
+		baseLoader(p, path)
+		tempMap := p.bootKeyValueMap
+		p.bootKeyValueMap = p.keyValueMap
+		p.keyValueMap = tempMap
+	}
+}
 func GlobalPropertyLoader(path string) func(*Properties) {
 	return func(p *Properties) {
 		println("-- global environment --")
@@ -47,10 +61,7 @@ func LoadOSEnvironment() func(*Properties) {
 			if len(parts) < 2 {
 				log.Fatalf("Invalid environment variable string: %s", kv)
 			}
-			var key = strings.Trim(parts[0], "")
-			var value = strings.Trim(parts[1], "")
-			println(key, "-->", value)
-			p.keyValueMap[key] = value
+			setKV(p, parts[0], parts[1])
 		}
 	}
 }
@@ -65,19 +76,19 @@ func baseLoader(p *Properties, path string) {
 	fsys := os.DirFS(dir)
 	file, err := fsys.Open(filename + ".yaml")
 	if err == nil {
-		loadYAML(file, p.keyValueMap)
+		loadYAML(p, file)
 	}
 	file, err = fsys.Open(filename + ".json")
 	if err == nil {
-		loadJSON(file, p.keyValueMap)
+		loadJSON(p, file)
 	}
 	file, err = fsys.Open(filename + ".properties")
 	if err == nil {
-		loadPropertiesFromFile(file, p.keyValueMap)
+		loadPropertiesFromFile(p, file)
 	}
 }
 
-func loadPropertiesFromFile(file fs.File, m map[string]string) {
+func loadPropertiesFromFile(p *Properties, file fs.File) {
 	println("-- properties --")
 	defer file.Close()
 	scanner := bufio.NewScanner(file)
@@ -93,18 +104,11 @@ func loadPropertiesFromFile(file fs.File, m map[string]string) {
 		if len(parts) < 2 {
 			log.Fatalf("Invalid property string: %s", line)
 		}
-		var key = parts[0]
-		var value = parts[1]
-		strings.Trim(key, " ")
-		strings.Trim(value, " ")
-		println(key, "-->", value)
-		if key != "" {
-			m[key] = value
-		}
+		setKV(p, parts[0], parts[1])
 	}
 }
 
-func loadJSON(file fs.File, m map[string]string) {
+func loadJSON(p *Properties, file fs.File) {
 	println("-- json --")
 	defer file.Close()
 	byteValue, _ := io.ReadAll(file)
@@ -113,10 +117,10 @@ func loadJSON(file fs.File, m map[string]string) {
 	if err != nil {
 		log.Fatalf("Invalid properties JSON file. Error %s", err)
 	}
-	extractKVMap(m, result, "")
+	extractKVMap(p, result, "")
 }
 
-func loadYAML(file fs.File, m map[string]string) {
+func loadYAML(p *Properties, file fs.File) {
 	println("-- yaml --")
 	defer file.Close()
 	byteValue, _ := io.ReadAll(file)
@@ -125,10 +129,10 @@ func loadYAML(file fs.File, m map[string]string) {
 	if err != nil {
 		log.Fatalf("Invalid properties YAML file. Error %s", err)
 	}
-	extractKVMap(m, result, "")
+	extractKVMap(p, result, "")
 }
 
-func extractKVMap(m map[string]string, json map[string]interface{}, prefix string) {
+func extractKVMap(p *Properties, json map[string]interface{}, prefix string) {
 	var value string
 	skip := false
 	for key := range json {
@@ -146,7 +150,7 @@ func extractKVMap(m map[string]string, json map[string]interface{}, prefix strin
 				value = strconv.FormatBool(valueType)
 			case map[string]interface{}:
 				skip = true
-				extractKVMap(m, valueType, name+".")
+				extractKVMap(p, valueType, name+".")
 			default:
 				value = "???"
 				println("!type", valueType)
@@ -157,8 +161,53 @@ func extractKVMap(m map[string]string, json map[string]interface{}, prefix strin
 		if skip {
 			skip = false
 		} else {
-			println(name, "-->", value)
-			m[name] = value
+			setKV(p, name, value)
 		}
 	}
+}
+
+func setKV(p *Properties, key string, value string) {
+	k := strings.Trim(key, " ")
+	v := strings.Trim(value, " ")
+	if k != "" {
+		if containsExpression(value) {
+			// value with evaluation fields
+			p.evalKeyValueMap[k] = v
+			p.evalExprMap[k] = extractExpressions(value)
+
+		} else {
+			// simple value
+			p.keyValueMap[k] = v
+		}
+	}
+}
+
+// extract all expression in the rhs property
+func extractExpressions(value string) *list.List {
+	expr := value
+	var parts = expression_matcher.FindAllString(expr, -1)
+	fmt.Println(parts)
+	l := list.New()
+	for _, v := range parts {
+		name := name_matcher.FindStringSubmatch(v) // gives ${} then name, then :default if it exists
+		fmt.Println("name=", name)
+		defaultValue := name[2]
+		if defaultValue != "" {
+			defaultValue = defaultValue[1:]
+		}
+		l.PushBack(&exprParts{name[0], name[1], defaultValue})
+		println("---")
+	}
+	return l
+}
+
+func containsExpression(s string) bool {
+	r := expression_matcher.FindAllString(s, -1)
+	return len(r) > 0
+}
+
+type exprParts struct {
+	full         string // with  ${abc:xyz}, this is ${abc:xyz}
+	name         string // with  ${abc:xyz}, this is abc
+	defaultValue string // with  ${abc:xyz}, this is xyz
 }
