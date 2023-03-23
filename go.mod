@@ -1,4 +1,4 @@
-module propertySource
+module simpleProperties
 
 go 1.19
 
