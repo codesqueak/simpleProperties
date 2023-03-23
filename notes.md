@@ -11,4 +11,4 @@ git commit -m "simpleProperties: module for vx.y.z"
 git tag vx.y.z
 git push origin vx.y.z
 
-
+## ...and next
