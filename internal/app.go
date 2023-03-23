@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"simpleProperties/pkg/simpleProperties"
+	"github.com/codesqueak/simpleProperties/pkg/simpleProperties"
 )
 
 func main() {
