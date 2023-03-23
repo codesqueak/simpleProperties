@@ -17,6 +17,6 @@ jobs:
         with:
           go-version: "${{ matrix.go }}"
       - name: Run coverage
-        run: go test -race -coverprofile=coverage.txt -covermode=atomic
+        run: go test ./...  -coverprofile=coverage.txt -covermode=atomic
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
