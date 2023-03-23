@@ -1,4 +1,4 @@
-module simpleProperties
+module github.com/codesqueak/simpleProperties
 
 go 1.19
 
