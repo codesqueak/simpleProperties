@@ -19,7 +19,7 @@ Coffee!__ :coffee:](https://www.buymeacoffee.com/codesqueak) Thanks :thumbsup:
 Add this:
 
 ```
-go get github.com/codesqueak/simpleProperties/pkg/simpleProperties@v0.0.91
+go get github.com/codesqueak/simpleProperties/pkg/simpleProperties@v0.0.93
 ```
 
 ### In project code

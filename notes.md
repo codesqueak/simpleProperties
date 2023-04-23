@@ -6,8 +6,8 @@ go test ./...
 
 ## update 
 
-git add <whatever changed> // use git add -u to add all updated files
-git commit -m "simpleProperties: module for vx.y.z"
+create branch, add changes & merge as usual
+
 git tag vx.y.z
 
 By default, the git push command does not transfer tags to remote servers. You need to specify it / them
