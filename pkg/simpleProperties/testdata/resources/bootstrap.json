@@ -1,0 +1,6 @@
+{
+  "boostrap.json": "test_json",
+  "float": 123.45,
+  "int": 777,
+  "boolean": true
+}

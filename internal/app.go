@@ -5,10 +5,11 @@ import (
 	"github.com/codesqueak/simpleProperties/pkg/simpleProperties"
 )
 
+// just some code to run various test scenarios
 func main() {
 	println("-- start --")
 
-	properties := simpleProperties.NewProperties()
+	properties := simpleProperties.DefaultProperties()
 
 	properties.Load()
 

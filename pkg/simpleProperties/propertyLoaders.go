@@ -16,36 +16,40 @@ import (
 	"strings"
 )
 
-const basePath = "resource/application"
-const bootstrapPath = "resource/bootstrap"
+const basePath = "resources/application"
+const bootstrapPath = "resources/bootstrap"
 
-var expression_matcher, _ = regexp.Compile("(\\$+\\{\\S+(:\\S+){0,1}})")
-var name_matcher, _ = regexp.Compile("\\$\\{(\\S+?){1}(:\\S+?){0,1}}")
+var expression_matcher, _ = regexp.Compile("(\\$+\\{\\S+(:\\S+){0,1}})") // find all ${} expressions
+var name_matcher, _ = regexp.Compile("\\$\\{(\\S+?){1}(:\\S+?){0,1}}")   // find name & default values ${abc:xyz) -> abc, :xyz
 
+// BootPropertyLoader load properties from the the boostrap file(s)
 func BootPropertyLoader(path string) func(*Properties) {
 	return func(p *Properties) {
-		println("-- boot environment --")
+		log.Println("-- boot environment --")
 		baseLoader(p, path)
 		tempMap := p.bootKeyValueMap
 		p.bootKeyValueMap = p.keyValueMap
 		p.keyValueMap = tempMap
 	}
 }
+
+// GlobalPropertyLoader load properties from the the application property file(s)
 func GlobalPropertyLoader(path string) func(*Properties) {
 	return func(p *Properties) {
-		println("-- global environment --")
+		log.Println("-- global environment --")
 		baseLoader(p, path)
 	}
 }
 
+// ProfilePropertyLoader load properties from the the application_<profile> property file(s)
 func ProfilePropertyLoader(path string) func(*Properties) {
 	return func(p *Properties) {
-		println("-- profile environment --")
+		log.Println("-- profile environment --")
 		profileNames := strings.Split(p.keyValueMap["profile"], ",")
 		if len(profileNames) > 0 {
-			for _, name := range profileNames {
-				if name != "" {
-					name := strings.Trim(name, " ")
+			for _, profileName := range profileNames {
+				if profileName != "" {
+					name := strings.Trim(profileName, " \t")
 					baseLoader(p, path+"_"+name)
 				}
 			}
@@ -53,9 +57,10 @@ func ProfilePropertyLoader(path string) func(*Properties) {
 	}
 }
 
+// LoadOSEnvironment load properties from the the O/S environment
 func LoadOSEnvironment() func(*Properties) {
 	return func(p *Properties) {
-		println("-- os environment --")
+		log.Println("-- os environment --")
 		for _, kv := range os.Environ() {
 			parts := strings.Split(kv, "=")
 			if len(parts) < 2 {
@@ -70,8 +75,10 @@ func LoadOSEnvironment() func(*Properties) {
 // utilities
 //
 
+// load properties from the file specified in the path.  Look for .yaml, .json and .properties files with the
+// load order being .yaml least to .properties most
 func baseLoader(p *Properties, path string) {
-	println("Loading from: " + path)
+	log.Println("Loading from: " + path)
 	dir, filename := filepath.Split(path)
 	fsys := os.DirFS(dir)
 	file, err := fsys.Open(filename + ".yaml")
@@ -88,15 +95,16 @@ func baseLoader(p *Properties, path string) {
 	}
 }
 
+// load properties from the specified .properties file
 func loadPropertiesFromFile(p *Properties, file fs.File) {
-	println("-- properties --")
+	log.Println("-- properties --")
 	defer file.Close()
 	scanner := bufio.NewScanner(file)
 	scanner.Split(bufio.ScanLines)
 
 	for scanner.Scan() {
 		line := scanner.Text()
-		strings.Trim(line, " ")
+		strings.Trim(line, " \t")
 		if line == "" {
 			continue
 		}
@@ -108,8 +116,9 @@ func loadPropertiesFromFile(p *Properties, file fs.File) {
 	}
 }
 
+// load properties from the specified .json file
 func loadJSON(p *Properties, file fs.File) {
-	println("-- json --")
+	log.Println("-- json --")
 	defer file.Close()
 	byteValue, _ := io.ReadAll(file)
 	var result map[string]interface{}
@@ -120,8 +129,9 @@ func loadJSON(p *Properties, file fs.File) {
 	extractKVMap(p, result, "")
 }
 
+// load properties from the specified .yaml file
 func loadYAML(p *Properties, file fs.File) {
-	println("-- yaml --")
+	log.Println("-- yaml --")
 	defer file.Close()
 	byteValue, _ := io.ReadAll(file)
 	result := make(map[string]interface{})
@@ -132,6 +142,18 @@ func loadYAML(p *Properties, file fs.File) {
 	extractKVMap(p, result, "")
 }
 
+// recursively work through a map of key -> value, and convert each found value into a string.
+// if a value is a structure then the kv pairs are extracted by a recursive call, with each key
+// being prefixed with key of the origination kv pair
+//
+// for example:
+//
+//	{ "level1": {
+//	             "level2": "my value"
+//	            }
+//	}
+//
+// then the recursive prefix would be level1, giving a full property key of level1.level2
 func extractKVMap(p *Properties, json map[string]interface{}, prefix string) {
 	var value string
 	skip := false
@@ -153,7 +175,7 @@ func extractKVMap(p *Properties, json map[string]interface{}, prefix string) {
 				extractKVMap(p, valueType, name+".")
 			default:
 				value = "???"
-				println("!type", valueType)
+				log.Println("!type", valueType)
 			}
 		} else {
 			value = ""
@@ -166,9 +188,10 @@ func extractKVMap(p *Properties, json map[string]interface{}, prefix string) {
 	}
 }
 
+// put a kev pair into the property map. leading / trailing white space is removed
 func setKV(p *Properties, key string, value string) {
-	k := strings.Trim(key, " ")
-	v := strings.Trim(value, " ")
+	k := strings.Trim(key, " \t")
+	v := strings.Trim(value, " \t")
 	if k != "" {
 		if containsExpression(value) {
 			// value with evaluation fields
@@ -196,7 +219,7 @@ func extractExpressions(value string) *list.List {
 			defaultValue = defaultValue[1:]
 		}
 		l.PushBack(&exprParts{name[0], name[1], defaultValue})
-		println("---")
+		log.Println("---")
 	}
 	return l
 }

@@ -1,6 +1,7 @@
 package simpleProperties
 
 import "container/list"
+import "log"
 
 var internalProperties = &Properties{
 	make(map[string]string, 32),
@@ -22,7 +23,7 @@ var internalProperties = &Properties{
 // note: If mixed properties, JSON and YAML files are present, all will be read, but .yaml overridden by .json overridden by .properties
 
 func init() {
-	println("-- load bootstrap --")
+	log.Println("-- load bootstrap --")
 
 	operations := []func(p *Properties){}
 	// loaders
@@ -34,25 +35,41 @@ func init() {
 	operations = append(operations, BasicEvaluator())
 	// operations = append(operations, DefaultEvaluator())
 	//
+	internalProperties.operations = operations
 	// boot properties
 	f := BootPropertyLoader(bootstrapPath)
 	f(internalProperties)
 }
 
-func NewProperties() *Properties {
-	return &Properties{internalProperties.bootKeyValueMap,
-		internalProperties.keyValueMap,
-		internalProperties.evalKeyValueMap,
-		internalProperties.evalExprMap,
-		internalProperties.operations}
+// DefaultProperties create a default properties structure. This will contain the bootstrap properties and default operations
+// to load the properties via the default operations, call the Load method
+func DefaultProperties() *Properties {
+	return &Properties{copyKV(internalProperties.bootKeyValueMap),
+		make(map[string]string, 32),
+		make(map[string]string, 32),
+		make(map[string]*list.List, 32),
+		copyOps(internalProperties.operations),
+	}
 }
 
+// EmptyProperties create a blank properties structure with no data or operations
+func EmptyProperties() *Properties {
+	return &Properties{make(map[string]string, 32),
+		make(map[string]string, 32),
+		make(map[string]string, 32),
+		make(map[string]*list.List, 32),
+		nil,
+	}
+}
+
+// Load execute the list operations for property loading
 func (p *Properties) Load() {
 	for _, f := range p.operations {
 		f(p)
 	}
 }
 
+// GetBootProperty get a bootstrap property (if it exists)
 func (p *Properties) GetBootProperty(key string) string {
 	if key == "" {
 		return ""
@@ -61,6 +78,8 @@ func (p *Properties) GetBootProperty(key string) string {
 	}
 }
 
+// GetProperty get a global property (if it exists). will fall back to boostrap properties if not
+// held in the global property map
 func (p *Properties) GetProperty(key string) string {
 	if key == "" {
 		return ""
@@ -78,6 +97,7 @@ func (p *Properties) GetProperty(key string) string {
 	}
 }
 
+// GetEvalProperty get a value from the map of evaluated properties
 func (p *Properties) GetEvalProperty(key string) string {
 	if key == "" {
 		return ""
@@ -89,6 +109,7 @@ func (p *Properties) GetEvalProperty(key string) string {
 	}
 }
 
+// GetExprProperty get the list of expression data associated with a value key
 func (p *Properties) GetExprProperty(key string) *list.List {
 	if key == "" {
 		return nil
@@ -122,6 +143,22 @@ func (p *Properties) GetEvalKeys() []string {
 		keys = append(keys, k)
 	}
 	return keys
+}
+
+func copyKV(in map[string]string) map[string]string {
+	c := make(map[string]string)
+	for k, v := range in {
+		c[k] = v
+	}
+	return c
+}
+
+func copyOps(in []func(p *Properties)) []func(p *Properties) {
+	c := make([]func(p *Properties), len(in))
+	for i, v := range in {
+		c[i] = v
+	}
+	return c
 }
 
 type Properties struct {

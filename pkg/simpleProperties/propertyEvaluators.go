@@ -2,46 +2,73 @@ package simpleProperties
 
 import (
 	"container/list"
+	"fmt"
+	"log"
 	"strings"
 )
 
-func DefaultEvaluator() func(*Properties) {
-	return func(p *Properties) {
-		println("-- expression evaluator --")
-	}
-}
-
 // BasicEvaluator Try to evaluate all properties
-// Step 1 - Update all properties using know values but ignroing defaults
+// Step 1 - Update all properties using know values but ignoring defaults
 // Step 2 - Once no more can be evaluated, select one default, and repeat step 1
+//
+//	2a - When selecting a default, check for properties that don't appear in the lhs of any expression
+//	2b - If no default is available for (2a), use the first one that is available
+//
 // Step 3 - Once no more evaluations can be made, fail if unevaluated properties still exist, else all good
 func BasicEvaluator() func(*Properties) {
 	return func(p *Properties) {
 		for true {
-			println("-- basic evaluator - step 1 evaluate --")
+			log.Println("-- basic evaluator - step 1 evaluate --")
 			var changed bool
 			unresolved := p.GetEvalKeys()
 			for _, lhsName := range unresolved {
 				itemsList := p.evalExprMap[lhsName]
-				element := itemsList.Front()
-				item := element.Value.(*exprParts)
-				// do we have an existing property value for this ?
-				value := p.GetProperty(item.name)
-				changed = doEvaluation(p, value, itemsList, element, lhsName, item)
-			}
-			println("-- basic evaluator - step 1 complete --")
-			if !changed {
-				println("-- basic evaluator - step 2 use default --")
-				unresolved = p.GetEvalKeys()
-				for _, lhsName := range unresolved {
-					// do we have a default property value for this ?
-					itemsList := p.evalExprMap[lhsName]
-					element := itemsList.Front()
+				var next *list.Element
+				for element := itemsList.Front(); element != nil; element = next {
+					next = element.Next()
 					item := element.Value.(*exprParts)
-					defaultValue := item.defaultValue
-					changed = doEvaluation(p, defaultValue, itemsList, element, lhsName, item)
+					// do we have an existing property value for this ?
+					value := p.GetProperty(item.name)
+					changed = changed || doEvaluation(p, value, itemsList, element, lhsName, item, false)
 				}
-				println("-- basic evaluator - step 2 complete --")
+			}
+			// start looking at defaults
+			log.Println("-- basic evaluator - step 1 complete --")
+			if !changed {
+				log.Println("-- basic evaluator - step 2 use default --")
+				unresolved = p.GetEvalKeys()
+				for evalCheck := 0; evalCheck < 2; evalCheck++ { // 0 == check for lhs evaluator, 1 = don't check, use whatever is available
+					if changed {
+						break
+					}
+					fmt.Printf("-- basic evaluator - step 3 check with possible evaluator available: %v --\n", evalCheck)
+					// look at all unresolved item
+					for _, lhsName := range unresolved {
+						if changed {
+							break
+						}
+						// do we have a default property value for this ?
+						itemsList := p.evalExprMap[lhsName]
+						// go through all unresolved rhs items until we run out of elements
+						var next *list.Element
+						for element := itemsList.Front(); element != nil; element = next {
+							next = element.Next()
+							item := element.Value.(*exprParts)
+							name := item.name
+							if evalCheck == 0 && hasPotentialEvaluator(p, name) { // may yet get evaluated. Ignore until other defaults expended
+								continue
+							}
+							defaultValue := item.defaultValue
+							changed = doEvaluation(p, defaultValue, itemsList, element, lhsName, item, true)
+							log.Println("-- using default value " + defaultValue + " for the property " + item.name)
+							if changed {
+								log.Println("changed lhs, so re-evaluating everything")
+								break
+							}
+						}
+					}
+				}
+				log.Println("-- basic evaluator - step 2 complete --")
 			}
 			if !changed {
 				break
@@ -50,14 +77,37 @@ func BasicEvaluator() func(*Properties) {
 	}
 }
 
-func doEvaluation(p *Properties, value string, itemsList *list.List, element *list.Element, lhsName string, item *exprParts) bool {
-	if value != "" {
+// does the named value have a potential evaluator, e.g. abc = ${something} ?
+// if so, this should be used in default value assignment only after all named values without potential assignments
+// have been used first
+func hasPotentialEvaluator(p *Properties, name string) bool {
+	evalKeys := p.GetEvalKeys()
+	for _, key := range evalKeys {
+		if key == name {
+			return true
+		}
+	}
+	return false
+}
+
+// if we have resolved something -->
+// a) remove it from the list of things to resolve
+// b) replace all the placeholders in the rhs with the resolved value
+// c) if the lhs is fully resolved, put it into the remove it from the to be evaluated map and put it into the kv map
+func doEvaluation(p *Properties, resolvedValue string, itemsList *list.List, element *list.Element, lhsName string, item *exprParts, defaultReplacement bool) bool {
+	if resolvedValue != "" {
 		// update rhs expression
 		itemsList.Remove(element)
 		rhs := p.evalKeyValueMap[lhsName]
 		toBeReplaced := item.full
-		println("Substituting ", value, "for", toBeReplaced, "in", rhs)
-		evaluatedRhs := strings.Replace(rhs, toBeReplaced, value, -1)
+		log.Println("Substituting ", resolvedValue, "for", toBeReplaced, "in", rhs)
+		var replaceQuantity int
+		if defaultReplacement {
+			replaceQuantity = 1 // so we don't replace all with same default value
+		} else {
+			replaceQuantity = -1 // its not a default value, i.e. resolved lhs so safe to replace all
+		}
+		evaluatedRhs := strings.Replace(rhs, toBeReplaced, resolvedValue, replaceQuantity)
 		if containsExpression(evaluatedRhs) {
 			// not fully evaluated so just update partially resolved expression
 			p.evalKeyValueMap[lhsName] = evaluatedRhs
@@ -66,8 +116,8 @@ func doEvaluation(p *Properties, value string, itemsList *list.List, element *li
 			delete(p.evalKeyValueMap, lhsName)
 			delete(p.evalExprMap, lhsName)
 			p.keyValueMap[lhsName] = evaluatedRhs
+			return true
 		}
-		return true
 	}
 	return false
 }
