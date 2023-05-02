@@ -22,10 +22,9 @@ const bootstrapPath = "resources/bootstrap"
 var expression_matcher, _ = regexp.Compile("(\\$+\\{\\S+(:\\S+){0,1}})") // find all ${} expressions
 var name_matcher, _ = regexp.Compile("\\$\\{(\\S+?){1}(:\\S+?){0,1}}")   // find name & default values ${abc:xyz) -> abc, :xyz
 
-// BootPropertyLoader load properties from the the boostrap file(s)
+// BootPropertyLoader load properties from the boostrap file(s)
 func BootPropertyLoader(path string) func(*Properties) {
 	return func(p *Properties) {
-		log.Println("-- boot environment --")
 		baseLoader(p, path)
 		tempMap := p.bootKeyValueMap
 		p.bootKeyValueMap = p.keyValueMap
@@ -33,18 +32,16 @@ func BootPropertyLoader(path string) func(*Properties) {
 	}
 }
 
-// GlobalPropertyLoader load properties from the the application property file(s)
+// GlobalPropertyLoader load properties from the application property file(s)
 func GlobalPropertyLoader(path string) func(*Properties) {
 	return func(p *Properties) {
-		log.Println("-- global environment --")
 		baseLoader(p, path)
 	}
 }
 
-// ProfilePropertyLoader load properties from the the application_<profile> property file(s)
+// ProfilePropertyLoader load properties from the application_<profile> property file(s)
 func ProfilePropertyLoader(path string) func(*Properties) {
 	return func(p *Properties) {
-		log.Println("-- profile environment --")
 		profileNames := strings.Split(p.keyValueMap["profile"], ",")
 		if len(profileNames) > 0 {
 			for _, profileName := range profileNames {
@@ -57,10 +54,9 @@ func ProfilePropertyLoader(path string) func(*Properties) {
 	}
 }
 
-// LoadOSEnvironment load properties from the the O/S environment
+// LoadOSEnvironment load properties from the O/S environment
 func LoadOSEnvironment() func(*Properties) {
 	return func(p *Properties) {
-		log.Println("-- os environment --")
 		for _, kv := range os.Environ() {
 			parts := strings.Split(kv, "=")
 			if len(parts) < 2 {
@@ -71,14 +67,36 @@ func LoadOSEnvironment() func(*Properties) {
 	}
 }
 
+// LoadCLIParameters loads -key=value CLI parameters
+func LoadCLIParameters() func(*Properties) {
+	return func(p *Properties) {
+		if len(os.Args) > 1 { // ignore run param
+			var args = os.Args[1:]
+			for _, argString := range args {
+				arg := []rune(argString)
+				log.Printf("CLI arg %c", arg)
+				if len(arg) >= 3 { // smallest is -k=
+					if arg[0] == '-' {
+						arg = arg[1:]
+						before, after, found := strings.Cut(string(arg), "=")
+						if found && len(before) > 0 { // allow blank values
+							log.Printf("CLI key %s = %s", before, after)
+							setKV(p, before, after)
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
 //
 // utilities
 //
 
 // load properties from the file specified in the path.  Look for .yaml, .json and .properties files with the
-// load order being .yaml least to .properties most
+// load order being .yaml least to .properties highest
 func baseLoader(p *Properties, path string) {
-	log.Println("Loading from: " + path)
 	dir, filename := filepath.Split(path)
 	fsys := os.DirFS(dir)
 	file, err := fsys.Open(filename + ".yaml")
@@ -97,7 +115,6 @@ func baseLoader(p *Properties, path string) {
 
 // load properties from the specified .properties file
 func loadPropertiesFromFile(p *Properties, file fs.File) {
-	log.Println("-- properties --")
 	defer file.Close()
 	scanner := bufio.NewScanner(file)
 	scanner.Split(bufio.ScanLines)
@@ -118,7 +135,6 @@ func loadPropertiesFromFile(p *Properties, file fs.File) {
 
 // load properties from the specified .json file
 func loadJSON(p *Properties, file fs.File) {
-	log.Println("-- json --")
 	defer file.Close()
 	byteValue, _ := io.ReadAll(file)
 	var result map[string]interface{}
@@ -131,7 +147,6 @@ func loadJSON(p *Properties, file fs.File) {
 
 // load properties from the specified .yaml file
 func loadYAML(p *Properties, file fs.File) {
-	log.Println("-- yaml --")
 	defer file.Close()
 	byteValue, _ := io.ReadAll(file)
 	result := make(map[string]interface{})
@@ -175,7 +190,6 @@ func extractKVMap(p *Properties, json map[string]interface{}, prefix string) {
 				extractKVMap(p, valueType, name+".")
 			default:
 				value = "???"
-				log.Println("!type", valueType)
 			}
 		} else {
 			value = ""
@@ -219,7 +233,6 @@ func extractExpressions(value string) *list.List {
 			defaultValue = defaultValue[1:]
 		}
 		l.PushBack(&exprParts{name[0], name[1], defaultValue})
-		log.Println("---")
 	}
 	return l
 }

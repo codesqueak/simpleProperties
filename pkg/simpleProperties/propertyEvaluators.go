@@ -2,8 +2,6 @@ package simpleProperties
 
 import (
 	"container/list"
-	"fmt"
-	"log"
 	"strings"
 )
 
@@ -18,7 +16,6 @@ import (
 func BasicEvaluator() func(*Properties) {
 	return func(p *Properties) {
 		for true {
-			log.Println("-- basic evaluator - step 1 evaluate --")
 			var changed bool
 			unresolved := p.GetEvalKeys()
 			for _, lhsName := range unresolved {
@@ -33,16 +30,13 @@ func BasicEvaluator() func(*Properties) {
 				}
 			}
 			// start looking at defaults
-			log.Println("-- basic evaluator - step 1 complete --")
 			if !changed {
-				log.Println("-- basic evaluator - step 2 use default --")
 				unresolved = p.GetEvalKeys()
 				for evalCheck := 0; evalCheck < 2; evalCheck++ { // 0 == check for lhs evaluator, 1 = don't check, use whatever is available
 					if changed {
 						break
 					}
-					fmt.Printf("-- basic evaluator - step 3 check with possible evaluator available: %v --\n", evalCheck)
-					// look at all unresolved item
+					// look at all unresolved items
 					for _, lhsName := range unresolved {
 						if changed {
 							break
@@ -60,15 +54,12 @@ func BasicEvaluator() func(*Properties) {
 							}
 							defaultValue := item.defaultValue
 							changed = doEvaluation(p, defaultValue, itemsList, element, lhsName, item, true)
-							log.Println("-- using default value " + defaultValue + " for the property " + item.name)
 							if changed {
-								log.Println("changed lhs, so re-evaluating everything")
 								break
 							}
 						}
 					}
 				}
-				log.Println("-- basic evaluator - step 2 complete --")
 			}
 			if !changed {
 				break
@@ -100,7 +91,6 @@ func doEvaluation(p *Properties, resolvedValue string, itemsList *list.List, ele
 		itemsList.Remove(element)
 		rhs := p.evalKeyValueMap[lhsName]
 		toBeReplaced := item.full
-		log.Println("Substituting ", resolvedValue, "for", toBeReplaced, "in", rhs)
 		var replaceQuantity int
 		if defaultReplacement {
 			replaceQuantity = 1 // so we don't replace all with same default value

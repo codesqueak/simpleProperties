@@ -1,7 +1,6 @@
 package simpleProperties
 
 import "container/list"
-import "log"
 
 var internalProperties = &Properties{
 	make(map[string]string, 32),
@@ -23,13 +22,12 @@ var internalProperties = &Properties{
 // note: If mixed properties, JSON and YAML files are present, all will be read, but .yaml overridden by .json overridden by .properties
 
 func init() {
-	log.Println("-- load bootstrap --")
-
 	operations := []func(p *Properties){}
 	// loaders
 	operations = append(operations, GlobalPropertyLoader(basePath))
 	operations = append(operations, ProfilePropertyLoader(basePath))
 	//	operations = append(operations, LoadOSEnvironment())
+	operations = append(operations, LoadCLIParameters())
 	//
 	// evaluators
 	operations = append(operations, BasicEvaluator())

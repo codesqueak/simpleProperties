@@ -8,7 +8,7 @@ go test ./...
 
 create branch, add changes & merge as usual
 
-git tag vx.y.z
+git tag -a vx.y.z -m "This is my new version ..."
 
 By default, the git push command does not transfer tags to remote servers. You need to specify it / them
 
