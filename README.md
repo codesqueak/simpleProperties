@@ -40,7 +40,7 @@ properties.Load()
 
 If any property loaded has the key of profile, then any associated values are used to load further files.  For example, if the following exists:
 
-**Note:** The evaluation of property expression is carried out once the load operations have completed as part of the `Load()` call
+**Note:** The evaluation of property expressions is carried out once the load operations have completed as part of the `Load()` call
 
 `
 profile=dev,xyzzy

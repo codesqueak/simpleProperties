@@ -1,6 +1,9 @@
 package simpleProperties
 
-import "container/list"
+import (
+	"container/list"
+	"log"
+)
 
 var internalProperties = &Properties{
 	make(map[string]string, 32),
@@ -9,7 +12,7 @@ var internalProperties = &Properties{
 	make(map[string]*list.List, 32),
 	nil}
 
-// load simpleProperties with this precedence
+// load simpleProperties with this precedence and then evaluate
 //
 // 1. boot properties
 // 2. system simpleProperties
@@ -22,11 +25,11 @@ var internalProperties = &Properties{
 // note: If mixed properties, JSON and YAML files are present, all will be read, but .yaml overridden by .json overridden by .properties
 
 func init() {
-	operations := []func(p *Properties){}
+	operations := []func(p *Properties) error{}
 	// loaders
 	operations = append(operations, GlobalPropertyLoader(basePath))
 	operations = append(operations, ProfilePropertyLoader(basePath))
-	//	operations = append(operations, LoadOSEnvironment())
+	operations = append(operations, LoadOSEnvironment())
 	operations = append(operations, LoadCLIParameters())
 	//
 	// evaluators
@@ -35,8 +38,11 @@ func init() {
 	//
 	internalProperties.operations = operations
 	// boot properties
-	f := BootPropertyLoader(bootstrapPath)
-	f(internalProperties)
+	fn := BootPropertyLoader(bootstrapPath)
+	err := fn(internalProperties)
+	if err != nil {
+		log.Panicf("Unable to load boot properties. Error: %s", err.Error())
+	}
 }
 
 // DefaultProperties create a default properties structure. This will contain the bootstrap properties and default operations
@@ -61,10 +67,13 @@ func EmptyProperties() *Properties {
 }
 
 // Load execute the list operations for property loading
-func (p *Properties) Load() {
+func (p *Properties) Load() error {
 	for _, f := range p.operations {
-		f(p)
+		if err := f(p); err != nil {
+			return err
+		}
 	}
+	return nil
 }
 
 // GetBootProperty get a bootstrap property (if it exists)
@@ -151,8 +160,8 @@ func copyKV(in map[string]string) map[string]string {
 	return c
 }
 
-func copyOps(in []func(p *Properties)) []func(p *Properties) {
-	c := make([]func(p *Properties), len(in))
+func copyOps(in []func(p *Properties) error) []func(p *Properties) error {
+	c := make([]func(p *Properties) error, len(in))
 	for i, v := range in {
 		c[i] = v
 	}
@@ -164,5 +173,5 @@ type Properties struct {
 	keyValueMap     map[string]string
 	evalKeyValueMap map[string]string
 	evalExprMap     map[string]*list.List
-	operations      []func(p *Properties)
+	operations      []func(p *Properties) error
 }

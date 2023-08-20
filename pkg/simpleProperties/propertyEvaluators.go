@@ -13,8 +13,8 @@ import (
 //	2b - If no default is available for (2a), use the first one that is available
 //
 // Step 3 - Once no more evaluations can be made, fail if unevaluated properties still exist, else all good
-func BasicEvaluator() func(*Properties) {
-	return func(p *Properties) {
+func BasicEvaluator() func(*Properties) error {
+	return func(p *Properties) error {
 		for true {
 			var changed bool
 			unresolved := p.GetEvalKeys()
@@ -65,6 +65,7 @@ func BasicEvaluator() func(*Properties) {
 				break
 			}
 		}
+		return nil
 	}
 }
 
