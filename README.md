@@ -99,7 +99,7 @@ in separate files and evaluation of expressions only occurs once all loading is 
 Add this:
 
 ```
-go get github.com/codesqueak/simpleProperties/pkg/simpleProperties@v0.0.93
+go get -u github.com/codesqueak/simpleProperties/pkg/simpleProperties@vlatest
 ```
 
 ### In Project Code to Import
